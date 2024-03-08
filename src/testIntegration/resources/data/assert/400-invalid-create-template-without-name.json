@@ -1,0 +1,9 @@
+{
+  "code": 400,
+  "message": "Bad Request",
+  "errors": [
+    {
+      "name": "não deve estar em branco"
+    }
+  ]
+}

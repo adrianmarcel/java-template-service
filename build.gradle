@@ -1,0 +1,181 @@
+plugins {
+    id 'com.gorylenko.gradle-git-properties' version '2.4.1'
+    id 'com.palantir.git-version' version '3.0.0'
+    id 'io.spring.dependency-management' version '1.1.4'
+    id 'java'
+    id 'org.flywaydb.flyway' version '10.1.0'
+    id 'jacoco'
+    id 'idea'
+    id 'org.springframework.boot' version '3.2.1'
+}
+
+group = 'br.com.devtools'
+version = '1.0-SNAPSHOT'
+
+repositories {
+    mavenCentral()
+}
+
+gitProperties {
+    failOnNoGitDirectory = false
+}
+
+dependencies {
+    annotationProcessor 'org.projectlombok:lombok:1.18.30'
+    compileOnly 'org.projectlombok:lombok:1.18.30'
+    developmentOnly 'org.springframework.boot:spring-boot-devtools:3.2.1'
+    runtimeOnly 'org.flywaydb:flyway-database-postgresql:10.7.2'
+
+    implementation 'com.github.gavlyukovskiy:p6spy-spring-boot-starter:1.9.1'
+    implementation 'com.newrelic.telemetry:micrometer-registry-new-relic:0.10.0'
+    implementation 'com.squareup.okhttp3:okhttp:4.12.0'
+    implementation 'io.github.openfeign:feign-micrometer:13.1'
+    implementation 'io.github.openfeign:feign-okhttp:13.1'
+    implementation 'io.github.resilience4j:resilience4j-feign:2.2.0'
+    implementation 'io.github.resilience4j:resilience4j-micrometer:2.2.0'
+    implementation 'io.github.resilience4j:resilience4j-spring-cloud2:2.2.0'
+    implementation 'org.apache.commons:commons-lang3:3.14.0'
+    implementation 'org.flywaydb:flyway-core:10.7.2'
+    implementation 'org.hibernate:hibernate-core:6.4.4.Final'
+    implementation 'org.postgresql:postgresql:42.7.1'
+    implementation 'org.springdoc:springdoc-openapi-ui:1.7.0'
+    implementation 'org.springframework.boot:spring-boot-starter-actuator:3.2.1'
+    implementation 'org.springframework.boot:spring-boot-starter-data-jpa:3.2.1'
+    implementation 'org.springframework.boot:spring-boot-starter-validation:3.2.1'
+    implementation 'org.springframework.boot:spring-boot-starter-web:3.2.1'
+    implementation 'org.springframework.cloud:spring-cloud-starter-bootstrap:4.1.0'
+    implementation 'org.springframework.cloud:spring-cloud-starter-config:4.1.0'
+    implementation 'org.springframework.cloud:spring-cloud-starter-openfeign:4.1.0'
+    implementation 'org.springframework.cloud:spring-cloud-starter-sleuth:3.1.10'
+    implementation 'org.springframework.cloud:spring-cloud-starter-stream-rabbit:4.1.0'
+    implementation 'org.springframework.retry:spring-retry:2.0.5'
+    implementation 'org.zalando:logbook-spring-boot-starter:3.7.2'
+
+    testAnnotationProcessor 'org.projectlombok:lombok:1.18.30'
+    testCompileOnly 'org.projectlombok:lombok:1.18.30'
+    testImplementation 'com.github.tomakehurst:wiremock-standalone:3.0.1'
+    testImplementation 'io.rest-assured:json-path:5.4.0'
+    testImplementation 'io.rest-assured:rest-assured:5.4.0'
+    testImplementation 'io.rest-assured:xml-path:5.4.0'
+    testImplementation 'org.assertj:assertj-core:3.24.2'
+    testImplementation 'org.testcontainers:postgresql:1.19.3'
+    testImplementation 'org.awaitility:awaitility:4.2.0'
+    testImplementation 'org.mockito:mockito-inline:5.2.0'
+    testImplementation 'org.testcontainers:junit-jupiter:1.19.3'
+    testImplementation('org.springframework.boot:spring-boot-starter-test:3.2.1') {
+        exclude group: 'org.junit.vintage', module: 'junit-vintage-engine'
+    }
+}
+
+dependencyManagement {
+    imports {
+        mavenBom 'org.springframework.cloud:spring-cloud-dependencies:2023.0.0'
+    }
+}
+
+configurations {
+    compileOnly {
+        extendsFrom annotationProcessor
+    }
+
+    configureEach {
+        resolutionStrategy.cacheDynamicVersionsFor 1, 'seconds'
+    }
+
+    testIntegrationCompile.extendsFrom testCompile
+    testIntegrationRuntime.extendsFrom testRuntime
+    testIntegrationRuntimeOnly.extendsFrom testRuntimeOnly
+    testIntegrationImplementation.extendsFrom testImplementation
+}
+
+test {
+    useJUnitPlatform {
+        if (!(System.getProperty('includeTags') ?: '').isBlank()) {
+            includeTags System.getProperty('includeTags')
+        }
+
+        if (!(System.getProperty('excludeTags') ?: '').isBlank()) {
+            excludeTags System.getProperty('excludeTags')
+        }
+
+        excludeTags 'ComponentTest'
+    }
+
+    finalizedBy jacocoTestReport
+}
+
+jacocoTestReport {
+    dependsOn test
+    reports {
+        xml.required = false
+        csv.required = false
+    }
+    afterEvaluate {
+        classDirectories.setFrom(files(classDirectories.files.collect {
+            fileTree(dir: it, exclude: [
+                    '**/model/**',
+                    '**/domain/**',
+                    'application/**'
+            ])
+        }))
+    }
+}
+
+sourceSets {
+    testIntegration {
+        java {
+            compileClasspath += main.output + test.output
+            runtimeClasspath += main.output + test.output
+            srcDir file('src/testIntegration/java')
+        }
+        resources.srcDir file('src/testIntegration/resources')
+    }
+}
+
+idea {
+    module {
+        testSources.from(sourceSets.testIntegration.java.srcDirs())
+        testResources.from(sourceSets.testIntegration.resources.srcDirs())
+        scopes.TEST.plus += [configurations.testIntegrationCompile]
+    }
+}
+
+tasks.register('testIntegration', Test) {
+    testClassesDirs = sourceSets.testIntegration.output.classesDirs
+    classpath = sourceSets.testIntegration.runtimeClasspath
+
+    useJUnitPlatform()
+
+    reports {
+        html.required = true
+        junitXml.required = true
+    }
+}
+
+test.doFirst {
+    systemProperty 'spring.profiles.active', 'dev, test'
+}
+
+springBoot {
+    mainClass.set('br.com.devtools.service.template.Application')
+    buildInfo()
+}
+
+tasks.register('installGitHooks', Copy) {
+    from new File(rootProject.rootDir, 'hooks/pre-commit')
+    into { new File(rootProject.rootDir, '.git/hooks') }
+    fileMode 0775
+
+    from new File(rootProject.rootDir, 'hooks/pre-push')
+    into { new File(rootProject.rootDir, '.git/hooks') }
+    fileMode 0775
+}
+
+rootProject.tasks.named('processTestIntegrationResources') {
+    duplicatesStrategy = 'include'
+}
+
+tasks.register('compileOptions') {
+    sourceCompatibility = JavaVersion.VERSION_21
+    targetCompatibility = JavaVersion.VERSION_21
+}
